@@ -74,7 +74,7 @@ Central Dogma follows **trunk-based development** with a single long-lived branc
 
 1. Create a short-lived branch from `main`:
    ```bash
-   git checkout -b feat/add-external-secrets
+   git checkout -b feature/add-external-secrets
    ```
 2. Make your changes and validate them locally:
    ```bash
@@ -87,7 +87,7 @@ Central Dogma follows **trunk-based development** with a single long-lived branc
 
 | Prefix | Use |
 |---|---|
-| `feat/` | New addon, tenant or application |
+| `feature/` | New addon, tenant or application |
 | `fix/` | Fix a broken or misconfigured resource |
 | `chore/` | Version bumps and maintenance |
 | `promote/` | Promote a release between environments |

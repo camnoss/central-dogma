@@ -1,0 +1,86 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-tools
+      - run: scripts/validate.sh
+
+  # New services from MAGI (feature/add-<service>) merge themselves once their
+  # manifests validate and their first image is on GHCR.
+  merge-new-service:
+    needs: validate
+    if: >-
+      startsWith(github.head_ref, 'feature/add-') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_REF: ${{ github.head_ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-tools
+
+      - name: Check the pull request only adds a new service
+        id: check
+        run: |
+          service="${HEAD_REF#feature/add-}"
+          if ! [[ "$service" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+            echo "Not a service name: ${service}"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git cat-file -e "origin/main:apps/${service}" 2>/dev/null; then
+            echo "apps/${service}/ already exists on main, so this is not a new service."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          outside=$(gh pr view "$PR_NUMBER" --json files --jq '.files[].path' | grep -v "^apps/${service}/" || true)
+          if [ -n "$outside" ]; then
+            echo "The pull request changes files outside apps/${service}/:"
+            echo "$outside"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "service=${service}" >> "$GITHUB_OUTPUT"
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the first image
+        if: steps.check.outputs.eligible == 'true'
+        env:
+          SERVICE: ${{ steps.check.outputs.service }}
+        run: |
+          file="apps/${SERVICE}/overlays/dev/kustomization.yaml"
+          image=$(yq '.images[] | select(.name == "app") | .newName' "$file")
+          tag=$(yq '.images[] | select(.name == "app") | .newTag' "$file")
+          for attempt in $(seq 1 40); do
+            if scripts/image-exists.sh "$image" "$tag"; then
+              echo "Found ${image}:${tag}"
+              exit 0
+            fi
+            echo "Waiting for ${image}:${tag} (${attempt}/40)"
+            sleep 30
+          done
+          echo "::error::${image}:${tag} did not appear on GHCR within 20 minutes."
+          exit 1
+
+      - name: Merge
+        if: steps.check.outputs.eligible == 'true'
+        run: |
+          gh pr merge "$PR_NUMBER" --squash
+          git push -q origin --delete "$HEAD_REF"

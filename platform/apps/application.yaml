@@ -17,6 +17,8 @@ spec:
         revision: main
         directories:
           - path: apps/*/overlays/*
+        # Pick up new services within a minute (default: 3 minutes).
+        requeueAfterSeconds: 60
   template:
     metadata:
       name: '{{ index .path.segments 1 }}-{{ .path.basename }}'

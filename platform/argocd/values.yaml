@@ -1,0 +1,6 @@
+configs:
+  cm:
+    # Check Central Dogma for changes every minute (chart default: 120s plus up
+    # to 60s of jitter), so release bot merges roll out quickly.
+    timeout.reconciliation: 60s
+    timeout.reconciliation.jitter: 10s

@@ -1,0 +1,54 @@
+name: Release bot
+
+# Deploys the newest image of every service to dev. Service CI sends an
+# image-published dispatch after pushing an image, so releases start right after
+# a merge. The hourly schedule catches up on missed dispatches.
+on:
+  repository_dispatch:
+    types: [image-published]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service to release. Leave empty to release all of them.
+        required: false
+  schedule:
+    - cron: "0 * * * *"
+
+# Runs never overlap. GitHub keeps only the newest pending run, which is safe
+# because every run checks all services.
+concurrency:
+  group: release-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-tools
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SERVICE: ${{ inputs.service }}
+        run: |
+          if [ -n "$SERVICE" ]; then
+            if ! [[ "$SERVICE" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+              echo "::error::Not a service name: ${SERVICE}"
+              exit 1
+            fi
+            scripts/release-bot.sh "$SERVICE"
+          else
+            scripts/release-bot.sh
+          fi

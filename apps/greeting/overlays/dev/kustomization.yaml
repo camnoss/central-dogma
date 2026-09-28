@@ -6,4 +6,4 @@ resources:
 images:
   - name: app
     newName: ghcr.io/camnoss/greeting
-    newTag: "ef450042f603440eccf0df6041e52287a0c8222d"
+    newTag: "0c97c166bf1bf65b1a3b08bee77b45124d3f18be"

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: greeting
+  labels:
+    app.kubernetes.io/name: greeting
+    backstage.io/kubernetes-id: greeting
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: greeting
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

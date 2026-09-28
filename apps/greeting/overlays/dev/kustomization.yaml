@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The namespace (greeting-dev) is set by the apps ApplicationSet.
+resources:
+  - ../../base
+images:
+  - name: app
+    newName: ghcr.io/camnoss/greeting
+    newTag: "ef450042f603440eccf0df6041e52287a0c8222d"

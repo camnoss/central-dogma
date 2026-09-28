@@ -1,0 +1,42 @@
+# Generates one ArgoCD Application per service environment.
+# Every apps/<service>/overlays/<env> directory becomes an app named
+# <service>-<env>, deployed to a namespace of the same name.
+#
+# The file is named application.yaml so the root app picks it up.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/camnoss/central-dogma
+        revision: main
+        directories:
+          - path: apps/*/overlays/*
+  template:
+    metadata:
+      name: '{{ index .path.segments 1 }}-{{ .path.basename }}'
+      labels:
+        nerv.io/service: '{{ index .path.segments 1 }}'
+        nerv.io/environment: '{{ .path.basename }}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/camnoss/central-dogma
+        targetRevision: main
+        path: '{{ .path.path }}'
+        kustomize:
+          namespace: '{{ index .path.segments 1 }}-{{ .path.basename }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ index .path.segments 1 }}-{{ .path.basename }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

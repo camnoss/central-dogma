@@ -1,0 +1,21 @@
+name: Set up manifest tools
+description: Installs pinned kustomize, kubeconform and yq.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        KUSTOMIZE_VERSION: v5.8.1
+        KUBECONFORM_VERSION: v0.8.0
+        YQ_VERSION: v4.53.6
+      run: |
+        bin="${RUNNER_TEMP}/bin"
+        mkdir -p "$bin"
+        curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+          | tar -xz -C "$bin" kustomize
+        curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+          | tar -xz -C "$bin" kubeconform
+        curl -fsSL -o "${bin}/yq" "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+        chmod +x "${bin}/yq"
+        echo "$bin" >> "$GITHUB_PATH"

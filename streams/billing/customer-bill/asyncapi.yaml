@@ -1,0 +1,40 @@
+asyncapi: 3.0.0
+info:
+  title: Customer bill state
+  version: 1.0.0
+  description: >
+    ECST snapshot of every finalized customer bill in Oracle BRM. CloudEvents 1.0.2,
+    Kafka binding in binary content mode; the record value is Avro.
+defaultContentType: application/avro
+channels:
+  customerBillState:
+    address: billing.customer-bill.state.v1
+    messages:
+      customerBillState:
+        name: CustomerBillState
+        headers:
+          type: object
+          properties:
+            ce_specversion: { type: string, const: "1.0" }
+            ce_id: { type: string, description: "{billId}-{stateVersion}" }
+            ce_source: { type: string, const: "urn:company:billing:customer-bill-projector" }
+            ce_type: { type: string, const: "com.company.billing.customerbill.state.v1" }
+            ce_subject: { type: string, description: billId }
+            ce_time: { type: string, format: date-time }
+            ce_partitionkey: { type: string, description: "billId, also the Kafka key" }
+            content-type: { type: string, const: application/avro }
+        payload:
+          schemaFormat: application/vnd.apache.avro+json;version=1.9.0
+          schema:
+            $ref: ./schema/CustomerBillState.avsc
+    bindings:
+      kafka:
+        partitions: 12
+        replicas: 3
+        topicConfiguration:
+          cleanup.policy: [compact]
+operations:
+  publishCustomerBillState:
+    action: send
+    channel:
+      $ref: '#/channels/customerBillState'

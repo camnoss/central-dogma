@@ -1,0 +1,25 @@
+# Kafka identity of the registry for KafkaSQL storage. The User Operator
+# writes its certificate to the nerv-registry Secret (user.p12, user.password).
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: nerv-registry
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: nerv-kafka
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      # The registry creates and owns its journal, snapshot and events topics.
+      - resource: { type: topic, name: kafkasql-journal, patternType: literal }
+        operations: [Create, Describe, DescribeConfigs, Read, Write]
+      - resource: { type: topic, name: kafkasql-snapshots, patternType: literal }
+        operations: [Create, Describe, DescribeConfigs, Read, Write]
+      - resource: { type: topic, name: registry-events, patternType: literal }
+        operations: [Create, Describe, DescribeConfigs, Read, Write]
+      # Every replica replays the journal with a new consumer group on startup.
+      - resource: { type: group, name: nerv-registry-, patternType: prefix }
+        operations: [Read]

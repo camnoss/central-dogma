@@ -1,0 +1,77 @@
+# In-cluster endpoints (Service nerv-registry-app-service, port 8080):
+#   Core API v3:          http://nerv-registry-app-service.kafka.svc:8080/apis/registry/v3
+#   Confluent-compatible: http://nerv-registry-app-service.kafka.svc:8080/apis/ccompat/v7
+apiVersion: registry.apicur.io/v1
+kind: ApicurioRegistry3
+metadata:
+  name: nerv-registry
+  namespace: kafka
+  annotations:
+    # After the operator, its CRD and the KafkaUser Secret.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  app:
+    replicas: 2
+    storage:
+      type: kafkasql
+      kafkasql:
+        bootstrapServers: nerv-kafka-kafka-bootstrap.kafka.svc:9093
+        tls:
+          # Client certificate from the nerv-registry KafkaUser.
+          keystoreSecretRef:
+            name: nerv-registry
+            key: user.p12
+          keystorePasswordSecretRef:
+            name: nerv-registry
+            key: user.password
+          # Strimzi cluster CA, to trust the brokers.
+          truststoreSecretRef:
+            name: nerv-kafka-cluster-ca-cert
+            key: ca.p12
+          truststorePasswordSecretRef:
+            name: nerv-kafka-cluster-ca-cert
+            key: ca.password
+    # Authentication is set with environment variables, not spec.app.auth: the
+    # 3.3.4 operator applies spec.app.auth.kubernetesAuth only when
+    # spec.app.auth.enabled is true, which also turns on OIDC, and Kubernetes
+    # TokenReview authentication cannot run together with OIDC.
+    env:
+      - name: APICURIO_RULES_GLOBAL_COMPATIBILITY
+        value: FULL_TRANSITIVE
+      - name: APICURIO_RULES_GLOBAL_VALIDITY
+        value: FULL
+      # Kubernetes TokenReview authentication is experimental in 3.3.
+      - name: APICURIO_FEATURES_EXPERIMENTAL_ENABLED
+        value: "true"
+      - name: APICURIO_AUTHN_KUBERNETES_ENABLED
+        value: "true"
+      - name: APICURIO_AUTHN_MECHANISM_PRIORITY
+        value: kubernetes
+      # Producers, consumers and serdes read schemas without credentials.
+      - name: APICURIO_AUTH_ANONYMOUS_READ_ACCESS_ENABLED
+        value: "true"
+      - name: APICURIO_AUTH_ROLE_BASED_AUTHORIZATION
+        value: "true"
+      - name: APICURIO_AUTH_ROLE_SOURCE
+        value: kubernetes
+      # Only the Central Dogma writer identity can create artifacts and
+      # versions. No group maps to admin: the global rules above cannot be
+      # changed through the API.
+      - name: APICURIO_AUTH_ROLE_SOURCE_KUBERNETES_GROUP_MAPPING_DEVELOPER
+        value: system:serviceaccounts:schema-registry-writers
+      # Any authenticated identity, such as the pull request gate, can read
+      # and run dry-run compatibility checks.
+      - name: APICURIO_AUTH_ROLE_SOURCE_KUBERNETES_GROUP_MAPPING_READONLY
+        value: system:authenticated
+      # ccompat subjects "<group>:<artifactId>" (billing:customer-bill-state)
+      # map to the group and artifact that CI registers through the Core API.
+      - name: APICURIO_CCOMPAT_GROUP_CONCAT_ENABLED
+        value: "true"
+      # Matches the group ACL of the nerv-registry KafkaUser.
+      - name: APICURIO_KAFKASQL_CONSUMER_GROUP_PREFIX
+        value: nerv-registry-
+    podTemplateSpec:
+      spec:
+        serviceAccountName: nerv-registry
+  ui:
+    enabled: false

@@ -1,0 +1,55 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# No namespace transformer: the writer identity must stay in its own namespace.
+# Every namespaced resource sets its namespace explicitly, so a plain
+# `kubectl apply -k` renders the same as the ArgoCD Application.
+resources:
+  # Apicurio Registry 3 operator: CRD, RBAC and Deployment, pinned to a release.
+  - https://raw.githubusercontent.com/Apicurio/apicurio-registry/3.3.4/operator/install/apicurio-registry-operator-3.3.4.yaml
+  - kafkauser.yaml
+  - serviceaccount.yaml
+  - ci-identities.yaml
+  - registry.yaml
+patches:
+  # The release manifest reads the watched namespaces from an OLM annotation.
+  # Without OLM, watch only kafka.
+  - target:
+      kind: Deployment
+      name: apicurio-registry-operator-v3.3.4
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: apicurio-registry-operator-v3.3.4
+      spec:
+        template:
+          spec:
+            containers:
+              - name: apicurio-registry-operator
+                env:
+                  - name: APICURIO_OPERATOR_WATCHED_NAMESPACES
+                    value: kafka
+                    valueFrom: null
+  # The release manifest uses a placeholder for the operator's namespace, and
+  # no namespace at all for its ServiceAccount.
+  - target:
+      kind: Deployment
+      name: apicurio-registry-operator-v3.3.4
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: kafka
+  - target:
+      kind: ServiceAccount
+      name: apicurio-registry-operator
+    patch: |-
+      - op: add
+        path: /metadata/namespace
+        value: kafka
+  - target:
+      kind: ClusterRoleBinding
+      name: apicurio-registry-operator-clusterrolebinding
+    patch: |-
+      - op: replace
+        path: /subjects/0/namespace
+        value: kafka

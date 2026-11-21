@@ -1,0 +1,45 @@
+# Registry identities for the Central Dogma schema workflow. Kubernetes fills
+# each token Secret; an admin copies the token into GitHub (see README.md).
+# Nothing secret is stored in Git.
+#
+# - central-dogma-schema-writer: the only identity that can register schemas.
+#   Its namespace exists for it alone, because the registry maps the namespace
+#   group system:serviceaccounts:schema-registry-writers to the developer role.
+# - central-dogma-schema-gate: used on pull requests. It is only authenticated,
+#   which is enough for read-only calls and dry-run compatibility checks.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: schema-registry-writers
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: central-dogma-schema-writer
+  namespace: schema-registry-writers
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: central-dogma-schema-writer-token
+  namespace: schema-registry-writers
+  annotations:
+    kubernetes.io/service-account.name: central-dogma-schema-writer
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: central-dogma-schema-gate
+  namespace: kafka
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: central-dogma-schema-gate-token
+  namespace: kafka
+  annotations:
+    kubernetes.io/service-account.name: central-dogma-schema-gate

@@ -1,0 +1,37 @@
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: nerv-kafka
+spec:
+  kafka:
+    # KRaft only. The brokers and controllers come from the KafkaNodePools that
+    # carry the strimzi.io/cluster: nerv-kafka label.
+    version: 4.3.2
+    listeners:
+      # The only client listener: TLS with mutual TLS authentication. Every
+      # client is a KafkaUser with its own certificate.
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: tls
+    # Enforce the ACLs declared in KafkaUser resources. A principal without an
+    # ACL is denied.
+    authorization:
+      type: simple
+    config:
+      # Stream topics do not set replicas or min.insync.replicas: they inherit
+      # these defaults, so the same stream folder works in every environment.
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      # Topics exist only as KafkaTopic resources in Central Dogma.
+      auto.create.topics.enable: false
+  entityOperator:
+    # Both operators watch the kafka namespace, where the stream Applications
+    # create KafkaTopic and KafkaUser resources.
+    topicOperator: {}
+    userOperator: {}

@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Production sizing. Environment overlays patch it; never edit it to fit dev.
+namespace: kafka
+resources:
+  - kafka.yaml
+  - kafkanodepool.yaml

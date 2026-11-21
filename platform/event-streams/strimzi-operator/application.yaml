@@ -1,0 +1,38 @@
+# Strimzi Cluster Operator. Installs the kafka.strimzi.io CRDs (only the v1 API
+# exists since Strimzi 1.0) and watches the kafka namespace, where nerv-kafka,
+# its topics and its users live.
+#
+# The file is named application.yaml so the root app picks it up.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: strimzi-operator
+  namespace: argocd
+  annotations:
+    # Before the cluster, the registry and the streams: they all need its CRDs.
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  sources:
+    - repoURL: https://strimzi.io/charts/
+      chart: strimzi-kafka-operator
+      targetRevision: 1.3.1
+      helm:
+        valueFiles:
+          - $values/platform/event-streams/strimzi-operator/values.yaml
+    - repoURL: https://github.com/camnoss/central-dogma
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka
+  syncPolicy:
+    automated:
+      # Never prune: removing a Strimzi CRD deletes every Kafka, KafkaTopic and
+      # KafkaUser in the cluster, and with them the topics and their data.
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The Strimzi CRDs are too large for client-side apply.
+      - ServerSideApply=true

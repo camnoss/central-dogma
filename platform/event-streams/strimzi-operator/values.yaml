@@ -1,0 +1,4 @@
+# Watch only the namespace the chart is installed in (kafka). Kafka, KafkaTopic
+# and KafkaUser resources anywhere else are ignored.
+watchNamespaces: []
+watchAnyNamespace: false

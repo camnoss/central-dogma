@@ -1,0 +1,78 @@
+# Event streams: one ArgoCD Application per streams/<domain>/<entity> folder,
+# named stream-<domain>-<entity>. Each one syncs only kafkatopic.yaml and
+# kafkausers.yaml into the kafka namespace; the schema, the AsyncAPI document
+# and catalog-info.yaml are for CI and MAGI.
+#
+# Topics are never deleted from Git: stream Applications do not prune, the
+# ApplicationSet never deletes the Applications it created, and every
+# KafkaTopic carries Delete=false. Removing a topic is a manual operation.
+#
+# The file is named application.yaml so the root app picks it up.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: event-streams
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  description: Kafka topics and users of Nerv event streams, one Application per stream folder.
+  sourceRepos:
+    - https://github.com/camnoss/central-dogma
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: kafka
+  # No cluster-scoped resources, and only these two namespaced kinds.
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: kafka.strimzi.io
+      kind: KafkaTopic
+    - group: kafka.strimzi.io
+      kind: KafkaUser
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: event-streams
+  namespace: argocd
+  annotations:
+    # After the AppProject, and after kafka-cluster is Healthy so the Topic and
+    # User Operators are running.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/camnoss/central-dogma
+        revision: main
+        directories:
+          - path: streams/*/*
+        # Pick up new streams within a minute (default: 3 minutes).
+        requeueAfterSeconds: 60
+  syncPolicy:
+    # Create and update stream Applications, never delete them: deleting a
+    # folder must not delete a topic and its history.
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: 'stream-{{ index .path.segments 1 }}-{{ .path.basename }}'
+      labels:
+        nerv.io/domain: '{{ index .path.segments 1 }}'
+        nerv.io/stream: '{{ .path.basename }}'
+    spec:
+      project: event-streams
+      source:
+        repoURL: https://github.com/camnoss/central-dogma
+        targetRevision: main
+        path: '{{ .path.path }}'
+        directory:
+          include: '{kafkatopic.yaml,kafkausers.yaml}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: kafka
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true

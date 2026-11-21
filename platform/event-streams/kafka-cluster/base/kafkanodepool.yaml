@@ -1,0 +1,28 @@
+# Three nodes that are both KRaft controllers and brokers.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: dual-role
+  labels:
+    strimzi.io/cluster: nerv-kafka
+spec:
+  replicas: 3
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 100Gi
+        # Keep the data if the node pool is deleted.
+        deleteClaim: false
+        # The KRaft metadata log shares this volume.
+        kraftMetadata: shared
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      memory: 4Gi

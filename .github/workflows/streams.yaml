@@ -1,0 +1,137 @@
+name: Streams
+
+# Schema gate and registration for streams/<domain>/<entity>/.
+#
+# Pull requests: "Stream gate" checks every changed stream folder: Avro syntax,
+# FULL_TRANSITIVE compatibility against every registered version (dry run,
+# nothing is registered), the AsyncAPI document, one writer and a compacted
+# topic. These checks replace an admission policy: make "Stream gate" a
+# required status check on main (see README.md). It runs on every pull request
+# and passes right away when no stream changed.
+#
+# Push to main: registers every stream schema with the writer identity.
+# Registration is idempotent, so unchanged schemas keep their version.
+#
+# The registry runs inside Geofront. The registry jobs run on the runner named
+# by the SCHEMA_REGISTRY_RUNNER variable, which must reach SCHEMA_REGISTRY_URL.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "streams/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ASYNCAPI_CLI_VERSION: 6.3.0
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      dirs: ${{ steps.changed.outputs.dirs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r scripts/requirements-streams.txt
+      - id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          dirs=$(python scripts/streams.py changed "origin/${BASE_REF}" | tr '\n' ' ')
+          echo "Changed stream folders: ${dirs:-none}"
+          echo "dirs=${dirs}" >> "$GITHUB_OUTPUT"
+
+  # Steps 1, 3 and 4: Avro syntax, AsyncAPI document, topic and user rules.
+  lint:
+    needs: changes
+    if: needs.changes.outputs.dirs != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r scripts/requirements-streams.txt
+      - run: npm install --global "@asyncapi/cli@${ASYNCAPI_CLI_VERSION}"
+      - env:
+          DIRS: ${{ needs.changes.outputs.dirs }}
+        run: |
+          # shellcheck disable=SC2086 # one argument per folder
+          python scripts/streams.py lint $DIRS
+
+  # Step 2: FULL_TRANSITIVE dry run against the registry. The gate identity is
+  # read-only, which is enough for a dry run and cannot register anything.
+  compatibility:
+    needs: changes
+    if: needs.changes.outputs.dirs != ''
+    runs-on: ${{ vars.SCHEMA_REGISTRY_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r scripts/requirements-streams.txt
+      - env:
+          DIRS: ${{ needs.changes.outputs.dirs }}
+          SCHEMA_REGISTRY_URL: ${{ secrets.SCHEMA_REGISTRY_URL }}
+          SCHEMA_REGISTRY_TOKEN: ${{ secrets.SCHEMA_REGISTRY_GATE_TOKEN }}
+        run: |
+          # shellcheck disable=SC2086 # one argument per folder
+          python scripts/streams.py check $DIRS
+
+  # The single required check. Skipped jobs (no stream changed) pass; failed
+  # or cancelled ones block the merge.
+  gate:
+    name: Stream gate
+    needs: [changes, lint, compatibility]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: ${RESULTS}"
+          for result in $RESULTS; do
+            if [ "$result" != success ] && [ "$result" != skipped ]; then
+              echo "::error::A stream check did not pass. See the lint and compatibility jobs."
+              exit 1
+            fi
+          done
+
+  # Step 5: register on main with the writer identity. Its token lives in the
+  # schema-registry environment, which only the main branch can use, so pull
+  # request jobs never see it.
+  register:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ${{ vars.SCHEMA_REGISTRY_RUNNER || 'ubuntu-latest' }}
+    environment: schema-registry
+    concurrency:
+      group: schema-registry
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r scripts/requirements-streams.txt
+      - env:
+          SCHEMA_REGISTRY_URL: ${{ secrets.SCHEMA_REGISTRY_URL }}
+          SCHEMA_REGISTRY_TOKEN: ${{ secrets.SCHEMA_REGISTRY_WRITE_TOKEN }}
+        run: |
+          mapfile -t dirs < <(python scripts/streams.py all)
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "No streams to register."
+            exit 0
+          fi
+          python scripts/streams.py register "${dirs[@]}"

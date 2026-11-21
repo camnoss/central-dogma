@@ -1,0 +1,17 @@
+# Code owners review every pull request that touches their paths. The last
+# matching pattern wins.
+#
+# TODO: the team handles below are placeholders. Replace them with the real
+# GitHub teams once Central Dogma moves to a GitHub organization.
+
+# Event streams platform: Kafka, the schema registry and the stream checks.
+/platform/event-streams/                    @nerv-platform/platform-team
+/scripts/streams.py                         @nerv-platform/platform-team
+/scripts/requirements-streams.txt           @nerv-platform/platform-team
+/.github/workflows/streams.yaml             @nerv-platform/platform-team
+/.github/CODEOWNERS                         @nerv-platform/platform-team
+
+# Stream folders: owned by the domain team that produces the stream.
+/streams/billing/                           @nerv-platform/team-tarificacion-facturacion
+/streams/payments/                          @nerv-platform/team-pagos-cartera
+/streams/customers/                         @nerv-platform/team-clientes

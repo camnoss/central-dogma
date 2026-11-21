@@ -1,0 +1,31 @@
+# nerv-registry: Apicurio Registry 3, the schema contract store of Nerv event
+# streams. Runs in the kafka namespace with KafkaSQL storage on nerv-kafka.
+#
+# The file is named application.yaml so the root app picks it up.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: apicurio-registry
+  namespace: argocd
+  annotations:
+    # After kafka-cluster is Healthy: KafkaSQL storage needs a running cluster,
+    # and the registry's KafkaUser needs the User Operator.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/camnoss/central-dogma
+    targetRevision: main
+    path: platform/event-streams/apicurio-registry
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # The operator CRD is large and the ApicurioRegistry3 CRD is created in
+      # the same sync as its first instance.
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

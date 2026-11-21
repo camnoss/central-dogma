@@ -1,0 +1,21 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: billing.customer-bill.state.v1
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: nerv-kafka
+    nerv.io/domain: billing
+    nerv.io/owner: team-tarificacion-facturacion
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    # ArgoCD never deletes this topic, even if the Application is deleted.
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  partitions: 12
+  # replicas and min.insync.replicas come from the nerv-kafka broker defaults:
+  # 3 and 2 in production, 1 and 1 in the single-broker dev cluster.
+  config:
+    cleanup.policy: compact
+    min.compaction.lag.ms: 604800000     # 7 days: consumers see intermediate states
+    delete.retention.ms: 86400000        # tombstones visible for 24 h

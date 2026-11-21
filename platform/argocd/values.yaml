@@ -4,3 +4,20 @@ configs:
     # to 60s of jitter), so release bot merges roll out quickly.
     timeout.reconciliation: 60s
     timeout.reconciliation.jitter: 10s
+    # Restore the health of Application resources (removed in ArgoCD 1.8), so
+    # sync waves in the root app wait for each platform component to become
+    # Healthy: strimzi-operator, then kafka-cluster, then apicurio-registry and
+    # the event-streams ApplicationSet.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil then
+        if obj.status.health ~= nil then
+          hs.status = obj.status.health.status
+          if obj.status.health.message ~= nil then
+            hs.message = obj.status.health.message
+          end
+        end
+      end
+      return hs

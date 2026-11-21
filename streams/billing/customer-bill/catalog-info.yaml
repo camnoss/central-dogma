@@ -1,0 +1,53 @@
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: billing-customer-bill-state-v1
+  title: Customer bill state (ECST)
+  description: Current state of every finalized bill in Oracle BRM.
+  tags: [ecst, kafka, avro]
+  annotations:
+    nerv.io/kafka-topic: billing.customer-bill.state.v1
+    nerv.io/schema-artifact: billing/customer-bill-state
+    nerv.io/compatibility: FULL_TRANSITIVE
+    # MAGI adds the providesApi relation from this annotation, so streams
+    # created from Eva Templates do not need to edit the producer's own entity.
+    nerv.io/producer: component:default/customer-bill-state-projector
+    argocd/app-name: stream-billing-customer-bill
+spec:
+  type: asyncapi
+  lifecycle: production
+  owner: group:team-tarificacion-facturacion
+  system: billing
+  definition:
+    # $asyncapi (not $text) bundles the $ref to schema/CustomerBillState.avsc,
+    # so MAGI renders the full message payload.
+    $asyncapi: ./asyncapi.yaml
+---
+# The BRM projector has no repository in the catalog yet, so its entity lives
+# with the stream it produces.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: customer-bill-state-projector
+  description: Projects finalized BRM bills into the billing.customer-bill.state.v1 stream.
+spec:
+  type: service
+  lifecycle: production
+  owner: group:team-tarificacion-facturacion
+  system: billing
+  providesApis: [billing-customer-bill-state-v1]
+---
+# Pagos y Cartera's bill view consumes this stream as the payments-bill-view
+# KafkaUser. Move consumesApis to the consumer's own catalog-info.yaml once
+# its repository is registered in MAGI, and delete this entity.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: payments-bill-view
+  description: Pagos y Cartera read model of customer bills, fed by billing.customer-bill.state.v1.
+spec:
+  type: service
+  lifecycle: production
+  owner: group:team-pagos-cartera
+  system: payments
+  consumesApis: [billing-customer-bill-state-v1]

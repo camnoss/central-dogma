@@ -144,10 +144,12 @@ streams/<domain>/<entity>/           # the domain team (CODEOWNERS)
 
 ### Creating a stream
 
-Run **Publish an ECST state stream** in MAGI. It opens a pull request from `feature/stream-<domain>-<entity>` with the folder (never `feature/add-*`, so it is not merged automatically). After review by the domain team and a green **Stream gate**, merge it:
+Run **Publish an ECST state stream** in MAGI and define the schema's fields in the form. It opens a pull request from `feature/stream-<domain>-<entity>` with the folder.
+
+**New streams merge themselves.** When **Stream gate** passes, the `merge-new-stream` job squash-merges the pull request if it only adds one new `streams/<domain>/<entity>/` folder that matches its branch name and doesn't exist on `main` yet. Any other pull request that touches `streams/`, such as a schema change, a new consumer or a pull request opened by hand, waits for a review by the domain team. After the merge:
 
 1. The `event-streams` ApplicationSet creates `stream-<domain>-<entity>`, which syncs only `kafkatopic.yaml` and `kafkausers.yaml` into `kafka`. The `event-streams` AppProject allows nothing but `KafkaTopic` and `KafkaUser` there.
-2. The **Streams** workflow registers the schema in `nerv-registry`.
+2. The **Streams** workflow registers the schema in `nerv-registry`. A merge made by `merge-new-stream` uses `GITHUB_TOKEN`, which does not trigger the push to `main`, so the job starts that run itself with `workflow_dispatch`.
 3. MAGI discovers `catalog-info.yaml` and shows the stream as an `API` with its owner, producer and consumers.
 
 Topics never set `replicas` or `min.insync.replicas`: they inherit the broker defaults of the environment (3 and 2 in production, 1 and 1 in dev), so the same folder works everywhere.

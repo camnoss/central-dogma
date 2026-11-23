@@ -1,0 +1,40 @@
+asyncapi: 3.0.0
+info:
+  title: PaymentsStatus state
+  version: 1.0.0
+  description: >
+    ECST snapshot of every payments-status in the payments domain. CloudEvents 1.0.2,
+    Kafka binding in binary content mode; the record value is Avro.
+defaultContentType: application/avro
+channels:
+  paymentsStatusState:
+    address: payments.payments-status.state.v1
+    messages:
+      paymentsStatusState:
+        name: PaymentsStatusState
+        headers:
+          type: object
+          properties:
+            ce_specversion: { type: string, const: "1.0" }
+            ce_id: { type: string, description: "{paymentsStatusId}-{stateVersion}" }
+            ce_source: { type: string, const: "urn:company:payments:customer-bill-state-projector" }
+            ce_type: { type: string, const: "com.company.payments.paymentsstatus.state.v1" }
+            ce_subject: { type: string, description: paymentsStatusId }
+            ce_time: { type: string, format: date-time }
+            ce_partitionkey: { type: string, description: "paymentsStatusId, also the Kafka key" }
+            content-type: { type: string, const: application/avro }
+        payload:
+          schemaFormat: application/vnd.apache.avro+json;version=1.9.0
+          schema:
+            $ref: ./schema/PaymentsStatusState.avsc
+    bindings:
+      kafka:
+        partitions: 12
+        replicas: 3
+        topicConfiguration:
+          cleanup.policy: [compact]
+operations:
+  publishPaymentsStatusState:
+    action: send
+    channel:
+      $ref: '#/channels/paymentsStatusState'

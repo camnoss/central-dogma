@@ -1,0 +1,24 @@
+{
+  "type": "record",
+  "name": "PaymentsStatusState",
+  "namespace": "com.company.payments.paymentsstatus",
+  "doc": "Event-carried state transfer snapshot of one payments-status in the payments domain, keyed by paymentsStatusId. One record per committed change. Consumers upsert by paymentsStatusId only when stateVersion is greater than the stored one.",
+  "fields": [
+    { "name": "paymentsStatusId", "type": "string",
+      "doc": "Stable public id of the payments-status. Also the Kafka key, CloudEvents subject and partitionkey." },
+    { "name": "state",
+      "type": { "type": "enum", "name": "PaymentsStatusLifecycleState",
+        "symbols": ["UNKNOWN"],
+        "default": "UNKNOWN",
+        "doc": "Lifecycle state of the payments-status. Unknown symbols resolve to UNKNOWN, so new states stay compatible." } },
+    { "name": "totalAmount", "type": "string",
+      "doc": "Amount Paid" },
+    { "name": "cardType", "type": "string",
+      "doc": "Credit or Debit" },
+    { "name": "billingAddress", "type": ["null", "string"], "default": null },
+    { "name": "stateVersion", "type": "long",
+      "doc": "Monotonic version of this state. Readers must ignore records whose stateVersion is not greater than the stored one." },
+    { "name": "lastModifiedAt", "type": { "type": "long", "logicalType": "timestamp-millis" },
+      "doc": "Instant of the last committed change in the source system." }
+  ]
+}

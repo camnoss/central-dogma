@@ -1,0 +1,44 @@
+# One producer with Write on the topic. Every consumer gets its own user with
+# Read on the topic and on a consumer group of the same name. The User Operator
+# writes each user's certificate to a Secret with the user's name in kafka.
+#
+# To consume this stream, open a pull request that adds a KafkaUser below:
+#
+# ---
+# apiVersion: kafka.strimzi.io/v1
+# kind: KafkaUser
+# metadata:
+#   name: <consumer>-payments-plan
+#   namespace: kafka
+#   labels:
+#     strimzi.io/cluster: nerv-kafka
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "2"
+# spec:
+#   authentication:
+#     type: tls
+#   authorization:
+#     type: simple
+#     acls:
+#       - resource: { type: topic, name: payments.payments-plan.state.v1, patternType: literal }
+#         operations: [Read, Describe]
+#       - resource: { type: group, name: <consumer>-payments-plan, patternType: literal }
+#         operations: [Read]
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  # Used by customer-bill-state-projector.
+  name: payments-payments-plan-producer
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: nerv-kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource: { type: topic, name: payments.payments-plan.state.v1, patternType: literal }
+        operations: [Write, Describe]

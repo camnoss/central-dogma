@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "PaymentsPlanState",
+  "namespace": "com.company.payments.paymentsplan",
+  "doc": "TODO: complete this schema before the first merge. Event-carried state transfer snapshot of one payments-plan, keyed by paymentsPlanId. Add every field of the state below the envelope fields. After the first registration, new fields need a default and no field can be removed or renamed (FULL_TRANSITIVE).",
+  "fields": [
+    { "name": "paymentsPlanId", "type": "string",
+      "doc": "Stable public id of the payments-plan. Also the Kafka key, CloudEvents subject and partitionkey." },
+    { "name": "state",
+      "type": { "type": "enum", "name": "PaymentsPlanLifecycleState",
+        "symbols": ["UNKNOWN"],
+        "default": "UNKNOWN",
+        "doc": "Lifecycle state of the payments-plan. Add its states as symbols; unknown symbols resolve to UNKNOWN, so new symbols stay compatible." } },
+    { "name": "stateVersion", "type": "long",
+      "doc": "Monotonic version of this state. Readers must ignore records whose stateVersion is not greater than the stored one." },
+    { "name": "lastModifiedAt", "type": { "type": "long", "logicalType": "timestamp-millis" },
+      "doc": "Instant of the last committed change in the source system." }
+  ]
+}

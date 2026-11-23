@@ -1,0 +1,22 @@
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: payments-payments-status-state-v1
+  title: PaymentsStatus state (ECST)
+  description: Current state of every payments-status in the payments domain.
+  tags: [ecst, kafka, avro]
+  annotations:
+    nerv.io/kafka-topic: payments.payments-status.state.v1
+    nerv.io/schema-artifact: payments/payments-status-state
+    nerv.io/compatibility: FULL_TRANSITIVE
+    # MAGI adds the providesApi relation to the producer from this annotation.
+    nerv.io/producer: component:default/customer-bill-state-projector
+    argocd/app-name: stream-payments-payments-status
+spec:
+  type: asyncapi
+  lifecycle: production
+  owner: group:default/team-pagos-cartera
+  system: payments
+  definition:
+    # $asyncapi bundles the $ref to the Avro schema for the API page.
+    $asyncapi: ./asyncapi.yaml

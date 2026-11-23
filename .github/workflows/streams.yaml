@@ -9,6 +9,9 @@ name: Streams
 # required status check on main (see README.md). It runs on every pull request
 # and passes right away when no stream changed.
 #
+# New streams from MAGI merge themselves once Stream gate passes (see the
+# merge-new-stream job).
+#
 # Push to main: registers every stream schema with the writer identity.
 # Registration is idempotent, so unchanged schemas keep their version.
 #
@@ -108,6 +111,74 @@ jobs:
               exit 1
             fi
           done
+
+  # New streams from MAGI (feature/stream-<domain>-<entity>) merge themselves
+  # once the Stream gate passes, when the pull request only adds one new stream
+  # folder. Changes to existing streams still need a review by their team.
+  merge-new-stream:
+    needs: [changes, gate]
+    if: >-
+      github.event_name == 'pull_request' &&
+      startsWith(github.head_ref, 'feature/stream-') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      # Starts the register run on main after the merge.
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_REF: ${{ github.head_ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      DIRS: ${{ needs.changes.outputs.dirs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the pull request only adds a new stream
+        id: check
+        run: |
+          read -r -a dirs <<< "$DIRS"
+          if [ ${#dirs[@]} -ne 1 ]; then
+            echo "Changes ${#dirs[@]} stream folders, so it needs a review."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          dir="${dirs[0]}"                        # streams/<domain>/<entity>
+          stream="${dir#streams/}"
+          if [ "$HEAD_REF" != "feature/stream-${stream%%/*}-${stream#*/}" ]; then
+            echo "Branch ${HEAD_REF} does not match ${dir}, so it needs a review."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git cat-file -e "origin/main:${dir}" 2>/dev/null; then
+            echo "${dir} already exists on main: changes to a stream need a review."
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          outside=$(gh pr view "$PR_NUMBER" --json files --jq '.files[].path' | grep -v "^${dir}/" || true)
+          if [ -n "$outside" ]; then
+            echo "The pull request changes files outside ${dir}/:"
+            echo "$outside"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      - name: Merge
+        if: steps.check.outputs.eligible == 'true'
+        run: |
+          gh pr merge "$PR_NUMBER" --squash
+          git push -q origin --delete "$HEAD_REF"
+
+      # A merge made with GITHUB_TOKEN does not trigger the push to main, so
+      # start the register run explicitly.
+      - name: Register the schema
+        if: steps.check.outputs.eligible == 'true'
+        run: gh workflow run streams.yaml --ref main
 
   # Step 5: register on main with the writer identity. Its token lives in the
   # schema-registry environment, which only the main branch can use, so pull
